@@ -22,6 +22,7 @@ public class FileGenerationService {
 
     private final FileGeneratorFactory fileGeneratorFactory;
     private final JobCommandService jobCommandService;
+    private final JobRepository jobRepository;
 
     @EventListener
     @Async("fileGenerationTaskExecutor")
@@ -36,8 +37,9 @@ public class FileGenerationService {
     public void generateFile(String jobId, de.ma.download.model.FileType fileType, Object parameters) {
         try {
             JobEntity job = jobCommandService.updateJobStatus(jobId, JobStatusEnum.IN_PROGRESS);
+            String userId = job.getUserId();
 
-            log.info("Starting file generation for job: {}", jobId);
+            log.info("Starting file generation for job: {}, user: {}", jobId, userId);
 
             if (jobCommandService.isJobCancelled(jobId)) {
                 log.info("Job cancelled before generation: {}", jobId);
@@ -53,7 +55,7 @@ public class FileGenerationService {
                 return;
             }
 
-            GeneratedFile generatedFile = generator.generate(jobId, parameters);
+            GeneratedFile generatedFile = generator.generate(jobId, userId, parameters);
 
             if (jobCommandService.isJobCancelled(jobId)) {
                 log.info("Job cancelled after generation: {}", jobId);

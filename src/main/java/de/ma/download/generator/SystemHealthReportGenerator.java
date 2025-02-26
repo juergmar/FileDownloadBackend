@@ -5,7 +5,6 @@ import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import de.ma.download.dto.GeneratedFile;
 import de.ma.download.model.FileType;
-import de.ma.download.service.UserContextService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -21,15 +20,12 @@ import java.util.UUID;
 public class SystemHealthReportGenerator implements FileGenerator {
 
     private final ObjectMapper objectMapper;
-    private final UserContextService userContextService;
 
     @Override
-    public GeneratedFile generate(String jobId, Object parameters) {
-        log.info("Generating System Health Report for job: {}", jobId);
+    public GeneratedFile generate(String jobId, String userId, Object parameters) {
+        log.info("Generating System Health Report for job: {}, user: {}", jobId, userId);
 
         try {
-            String userId = userContextService.getCurrentUserId();
-
             ObjectNode rootNode = objectMapper.createObjectNode();
             addReportMetadata(rootNode, "System Health Report", userId);
 
