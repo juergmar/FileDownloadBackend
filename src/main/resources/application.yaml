@@ -5,7 +5,7 @@ spring:
       dialect: org.hibernate.dialect.PostgreSQLDialect
 
   datasource:
-    url: jdbc:postgresql://localhost:5432/leno
+    url: jdbc:postgresql://localhost:5432/download
     username: postgres
     password: postgres
     driver-class-name: org.postgresql.Driver
@@ -16,3 +16,5 @@ spring:
         jwt:
           issuer-uri: http://localhost:8090/realms/Leno
           jwk-set-uri: http://localhost:8090/realms/Leno/protocol/openid-connect/certs
+  application:
+    name: FileDownloadBackend
