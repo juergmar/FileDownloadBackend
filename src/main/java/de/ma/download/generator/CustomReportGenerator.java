@@ -2,6 +2,7 @@ package de.ma.download.generator;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import de.ma.download.dto.CustomReportRequest;
 import de.ma.download.dto.GeneratedFile;
 import de.ma.download.model.FileType;
 import lombok.RequiredArgsConstructor;
@@ -10,44 +11,31 @@ import org.springframework.stereotype.Component;
 
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
-import java.util.Map;
 import java.util.UUID;
 
 @Slf4j
 @Component
 @RequiredArgsConstructor
-public class CustomReportGenerator implements FileGenerator {
+public class CustomReportGenerator implements FileGenerator<CustomReportRequest> {
 
     private final ObjectMapper objectMapper;
 
     @Override
-    public GeneratedFile generate(String jobId, String userId, Object parameters) {
+    public GeneratedFile generate(String jobId, String userId, CustomReportRequest request) {
         log.info("Generating Custom Report for job: {}, user: {}", jobId, userId);
 
         try {
-            Map<String, Object> reportParams = parameters instanceof Map ?
-                    (Map<String, Object>) parameters :
-                    Map.of();
-
-            String reportName = reportParams.getOrDefault("reportName", "Custom").toString();
+            String reportName = request != null && request.getReportName() != null ?
+                    request.getReportName() : "Custom";
 
             ObjectNode rootNode = objectMapper.createObjectNode();
             addReportMetadata(rootNode, reportName + " Report", userId);
 
-            ObjectNode paramsNode = rootNode.putObject("parameters");
-            reportParams.forEach((key, value) -> {
-                switch (value) {
-                    case Integer i -> paramsNode.put(key, i);
-                    case Long l -> paramsNode.put(key, l);
-                    case Double v -> paramsNode.put(key, v);
-                    case Float v -> paramsNode.put(key, v);
-                    case Boolean b -> paramsNode.put(key, b);
-                    case null, default -> paramsNode.put(key, String.valueOf(value));
-                }
-            });
-
-            rootNode.putObject("data")
-                    .put("message", "Custom report generated successfully");
+            // Custom Report data
+            ObjectNode dataNode = rootNode.putObject("data");
+            dataNode.put("message", "Custom report generated successfully");
+            dataNode.put("reportName", reportName);
+            dataNode.put("customField", "This is a custom field");
 
             byte[] fileData = objectMapper.writeValueAsBytes(rootNode);
 
@@ -75,5 +63,10 @@ public class CustomReportGenerator implements FileGenerator {
     @Override
     public FileType getSupportedType() {
         return FileType.CUSTOM_REPORT;
+    }
+
+    @Override
+    public Class<CustomReportRequest> getRequestType() {
+        return CustomReportRequest.class;
     }
 }

@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import de.ma.download.dto.GeneratedFile;
+import de.ma.download.dto.UserActivityReportRequest;
 import de.ma.download.model.FileType;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -12,27 +13,23 @@ import org.springframework.stereotype.Component;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
-import java.util.Map;
 import java.util.UUID;
 
 @Slf4j
 @Component
 @RequiredArgsConstructor
-public class UserActivityReportGenerator implements FileGenerator {
+public class UserActivityReportGenerator implements FileGenerator<UserActivityReportRequest> {
 
     private final ObjectMapper objectMapper;
 
     @Override
-    public GeneratedFile generate(String jobId, String userId, Object parameters) {
+    public GeneratedFile generate(String jobId, String userId, UserActivityReportRequest request) {
         log.info("Generating User Activity Report for job: {}, user: {}", jobId, userId);
 
         try {
-            Map<String, Object> reportParams = parameters instanceof Map ?
-                    (Map<String, Object>) parameters :
-                    Map.of();
-
-            String startDate = reportParams.getOrDefault("startDate", "30").toString();
-            int days = Integer.parseInt(startDate);
+            int days = request != null && request.getStartDate() != null
+                    ? request.getStartDate()
+                    : 30;
 
             ObjectNode rootNode = objectMapper.createObjectNode();
             addReportMetadata(rootNode, "User Activity Report", userId);
@@ -75,5 +72,10 @@ public class UserActivityReportGenerator implements FileGenerator {
     @Override
     public FileType getSupportedType() {
         return FileType.USER_ACTIVITY_REPORT;
+    }
+
+    @Override
+    public Class<UserActivityReportRequest> getRequestType() {
+        return UserActivityReportRequest.class;
     }
 }

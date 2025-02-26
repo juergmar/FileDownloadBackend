@@ -1,13 +1,11 @@
 package de.ma.download.controller;
 
-import de.ma.download.dto.GenerateFileRequest;
 import de.ma.download.dto.JobDTO;
 import de.ma.download.dto.PagedJobResponse;
-import de.ma.download.model.FileType;
+import de.ma.download.dto.ReportRequest;
 import de.ma.download.service.FileDownloadService;
 import de.ma.download.service.JobManagementService;
 import io.swagger.v3.oas.annotations.Operation;
-import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -18,7 +16,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
-import java.util.List;
+import java.security.Principal;
 import java.util.Map;
 
 @Slf4j
@@ -34,8 +32,11 @@ public class FileDownloadController {
     @Operation(summary = "Generate a new file")
     @PostMapping("/generate")
     @PreAuthorize("isAuthenticated()")
-    public ResponseEntity<Map<String, String>> generateFile(@RequestBody @Valid GenerateFileRequest request) {
-        String jobId = jobManagementService.initiateJob(request.getFileType(), request.getParameters());
+    public ResponseEntity<Map<String, String>> generateFile(
+            @RequestBody @Valid ReportRequest request,
+            Principal principal) {
+
+        String jobId = jobManagementService.initiateJob(request, principal);
         return ResponseEntity.accepted().body(Map.of("jobId", jobId));
     }
 

@@ -1,8 +1,8 @@
 package de.ma.download.service;
 
 import de.ma.download.dto.JobDTO;
-import de.ma.download.dto.JobStatusDTO;
 import de.ma.download.dto.PagedJobResponse;
+import de.ma.download.dto.ReportRequest;
 import de.ma.download.entity.JobEntity;
 import de.ma.download.event.FileGenerationEvent;
 import de.ma.download.event.model.JobCreatedEvent;
@@ -11,6 +11,7 @@ import de.ma.download.exception.JobAlreadyExistsException;
 import de.ma.download.exception.JobNotFoundException;
 import de.ma.download.exception.ResourceAccessDeniedException;
 import de.ma.download.exception.ServiceOverloadedException;
+import de.ma.download.generator.GeneratorRegistry;
 import de.ma.download.mapper.JobMapper;
 import de.ma.download.model.FileType;
 import de.ma.download.model.JobStatusEnum;
@@ -18,7 +19,6 @@ import de.ma.download.repository.JobRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.cache.annotation.Cacheable;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -45,12 +45,18 @@ public class JobManagementService {
     private final ApplicationEventPublisher eventPublisher;
     private final JobEventStore eventStore;
     private final JobCommandService jobCommandService;
+    private final GeneratorRegistry generatorRegistry;
 
     @Value("${file.generation.max-jobs:1000}")
     private int maxJobs;
 
+    /**
+     * Initiate a job with a specific report request
+     */
     @Transactional
-    public String initiateJob(FileType fileType, Object parameters, Principal principal) {
+    public String initiateJob(ReportRequest request, Principal principal) {
+        FileType fileType = request.getFileType();
+
         if (jobRepository.count() >= maxJobs) {
             log.warn("Max job capacity reached ({}). Triggering cleanup.", maxJobs);
             jobCleanupService.cleanupExpiredJobs();
@@ -101,16 +107,21 @@ public class JobManagementService {
 
         notificationService.notifyJobStatusChange(job);
 
-        eventPublisher.publishEvent(new FileGenerationEvent(this, jobId, fileType, parameters));
+        eventPublisher.publishEvent(new FileGenerationEvent(this, jobId, fileType, request));
 
         return jobId;
     }
 
+    /**
+     * Initiate a job without a principal
+     */
     @Transactional
-    public String initiateJob(FileType fileType, Object parameters) {
-        return initiateJob(fileType, parameters, null);
+    public String initiateJob(ReportRequest request) {
+        return initiateJob(request, null);
     }
 
+    // Rest of the methods remain the same with minimal changes
+    // ...
 
     @Transactional
     public boolean cancelJob(String jobId, Principal principal) {
@@ -149,7 +160,18 @@ public class JobManagementService {
             throw new IllegalStateException("Only failed jobs can be retried");
         }
 
-        return initiateJob(originalJob.getFileType(), null, principal);
+        // Create a default request for the file type
+        FileType fileType = originalJob.getFileType();
+        try {
+            var generator = generatorRegistry.getGenerator(fileType);
+            var requestClass = generator.getRequestType();
+            var request = requestClass.getDeclaredConstructor().newInstance();
+
+            return initiateJob(request, principal);
+        } catch (Exception e) {
+            log.error("Failed to create default request for retry", e);
+            throw new IllegalStateException("Could not retry job", e);
+        }
     }
 
     @Transactional

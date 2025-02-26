@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import de.ma.download.dto.GeneratedFile;
+import de.ma.download.dto.SystemHealthReportRequest;
 import de.ma.download.model.FileType;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -17,15 +18,19 @@ import java.util.UUID;
 @Slf4j
 @Component
 @RequiredArgsConstructor
-public class SystemHealthReportGenerator implements FileGenerator {
+public class SystemHealthReportGenerator implements FileGenerator<SystemHealthReportRequest> {
 
     private final ObjectMapper objectMapper;
 
     @Override
-    public GeneratedFile generate(String jobId, String userId, Object parameters) {
+    public GeneratedFile generate(String jobId, String userId, SystemHealthReportRequest request) {
         log.info("Generating System Health Report for job: {}, user: {}", jobId, userId);
 
         try {
+            boolean includeDetailedMetrics = request != null &&
+                    request.getIncludeDetailedMetrics() != null &&
+                    request.getIncludeDetailedMetrics();
+
             ObjectNode rootNode = objectMapper.createObjectNode();
             addReportMetadata(rootNode, "System Health Report", userId);
 
@@ -46,6 +51,12 @@ public class SystemHealthReportGenerator implements FileGenerator {
                 service.put("name", serviceNames[i]);
                 service.put("status", serviceStatuses[i]);
                 service.put("lastChecked", Instant.now().toString());
+
+                if (includeDetailedMetrics) {
+                    service.put("responseTime", Math.random() * 100);
+                    service.put("availability", "99.95%");
+                    service.put("errorRate", "0.05%");
+                }
             }
 
             byte[] fileData = objectMapper.writeValueAsBytes(rootNode);
@@ -74,5 +85,10 @@ public class SystemHealthReportGenerator implements FileGenerator {
     @Override
     public FileType getSupportedType() {
         return FileType.SYSTEM_HEALTH_REPORT;
+    }
+
+    @Override
+    public Class<SystemHealthReportRequest> getRequestType() {
+        return SystemHealthReportRequest.class;
     }
 }
