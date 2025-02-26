@@ -1,4 +1,3 @@
-// File: FileDownloadService.java
 package de.ma.download.service;
 
 import de.ma.download.dto.JobDTO;
@@ -9,10 +8,12 @@ import de.ma.download.exception.ResourceAccessDeniedException;
 import de.ma.download.mapper.JobMapper;
 import de.ma.download.model.JobStatusEnum;
 import de.ma.download.repository.JobRepository;
-import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.security.Principal;
 
 @Slf4j
 @Service
@@ -23,36 +24,31 @@ public class FileDownloadService {
     private final JobMapper jobMapper;
     private final UserContextService userContextService;
 
-    /**
-     * Prepare a job for download, verifying it's ready
-     */
     @Transactional
-    public JobDTO prepareForDownload(String jobId) {
+    public JobDTO prepareForDownload(String jobId, Principal principal) {
         JobEntity job = jobRepository.findById(jobId)
                 .orElseThrow(() -> new JobNotFoundException(jobId));
 
-        verifyOwnership(job);
+        verifyOwnership(job, principal);
 
         if (job.getStatus() != JobStatusEnum.COMPLETED) {
             throw new FileNotReadyException(jobId);
         }
 
-        // Update last accessed time
-        job.updateAccessTime();
-        jobRepository.save(job);
-
         return jobMapper.toJobDTO(job);
     }
 
-    /**
-     * Get the file data for download
-     */
     @Transactional
-    public byte[] getFileData(String jobId) {
+    public JobDTO prepareForDownload(String jobId) {
+        return prepareForDownload(jobId, null);
+    }
+
+    @Transactional
+    public byte[] getFileData(String jobId, Principal principal) {
         JobEntity job = jobRepository.findById(jobId)
                 .orElseThrow(() -> new JobNotFoundException(jobId));
 
-        verifyOwnership(job);
+        verifyOwnership(job, principal);
 
         if (job.getFileData() == null || job.getFileData().length == 0) {
             throw new IllegalStateException("No file data available for job: " + jobId);
@@ -64,14 +60,27 @@ public class FileDownloadService {
         return job.getFileData();
     }
 
-    /**
-     * Verify the current user is authorized to access this job
-     */
-    private void verifyOwnership(JobEntity job) {
-        String currentUserId = userContextService.getCurrentUserId();
-        if (!currentUserId.equals(job.getUserId()) && !userContextService.isCurrentUserAdmin()) {
+    @Transactional
+    public byte[] getFileData(String jobId) {
+        return getFileData(jobId, null);
+    }
+
+    private void verifyOwnership(JobEntity job, Principal principal) {
+        String currentUserId;
+        boolean isAdmin;
+
+        if (principal != null) {
+            currentUserId = userContextService.getUserIdFromPrincipal(principal);
+            isAdmin = userContextService.isPrincipalAdmin(principal);
+        } else {
+            currentUserId = userContextService.getCurrentUserId();
+            isAdmin = userContextService.isCurrentUserAdmin();
+        }
+
+        if (!currentUserId.equals(job.getUserId()) && !isAdmin) {
+            log.warn("Access denied: User {} attempted to access job {} owned by {}",
+                    currentUserId, job.getJobId(), job.getUserId());
             throw new ResourceAccessDeniedException("You are not authorized to access this job");
         }
     }
-
 }

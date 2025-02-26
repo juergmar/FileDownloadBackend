@@ -5,6 +5,8 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.server.ServerHttpRequest;
 import org.springframework.http.server.ServerHttpResponse;
+import org.springframework.security.authentication.AbstractAuthenticationToken;
+import org.springframework.security.core.context.SecurityContext;
 import org.springframework.security.core.context.SecurityContextImpl;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
@@ -19,6 +21,7 @@ import java.util.Map;
 public class JwtHandshakeInterceptor implements HandshakeInterceptor {
 
     private static final String TOKEN_QUERY_PARAM = "token";
+    private static final String SECURITY_CONTEXT_ATTR = "SPRING_SECURITY_CONTEXT";
 
     private final JwtDecoder jwtDecoder;
     private final KeycloakJwtAuthenticationConverter jwtAuthenticationConverter;
@@ -35,10 +38,18 @@ public class JwtHandshakeInterceptor implements HandshakeInterceptor {
         if (token != null && !token.isEmpty()) {
             try {
                 Jwt jwt = jwtDecoder.decode(token);
-                // Set the security context attribute which Spring Security will use
-                attributes.put("SPRING_SECURITY_CONTEXT",
-                        new SecurityContextImpl(jwtAuthenticationConverter.convert(jwt)));
-                log.debug("JWT authentication set during handshake for user: {}", jwt.getSubject());
+                AbstractAuthenticationToken authentication = jwtAuthenticationConverter.convert(jwt);
+
+                if (authentication != null) {
+                    // Create and set the security context attribute
+                    SecurityContext securityContext = new SecurityContextImpl(authentication);
+                    attributes.put(SECURITY_CONTEXT_ATTR, securityContext);
+
+                    // Also store the authentication for WebSocket message handling
+                    attributes.put("_auth", authentication);
+
+                    log.debug("JWT authentication set during handshake for user: {}", jwt.getSubject());
+                }
             } catch (Exception e) {
                 log.warn("Failed to decode JWT token during handshake: {}", e.getMessage());
             }

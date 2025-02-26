@@ -16,49 +16,13 @@ import java.util.List;
 
 @Repository
 public interface JobRepository extends JpaRepository<JobEntity, String> {
-
-    List<JobEntity> findByUserIdOrderByCreatedAtDesc(String userId);
-
     Page<JobEntity> findByUserId(String userId, Pageable pageable);
-
-    List<JobEntity> findByStatus(JobStatusEnum status);
-
-    List<JobEntity> findByFileTypeAndStatus(FileType fileType, JobStatusEnum status);
-
-    List<JobEntity> findByUserIdAndFileTypeAndStatus(
-            String userId, FileType fileType, JobStatusEnum status);
 
     List<JobEntity> findByUserIdAndFileTypeAndStatusIn(
             String userId, FileType fileType, List<JobStatusEnum> statuses);
 
-    @Query("SELECT j FROM JobEntity j WHERE j.status IN :statuses AND j.lastAccessed < :cutoffTime")
-    List<JobEntity> findStaleJobs(
-            @Param("statuses") List<JobStatusEnum> statuses,
-            @Param("cutoffTime") Instant cutoffTime);
-
-    @Modifying
-    @Query("UPDATE JobEntity j SET j.status = :status, j.lastAccessed = CURRENT_TIMESTAMP WHERE j.jobId = :jobId")
-    int updateJobStatus(@Param("jobId") String jobId, @Param("status") JobStatusEnum status);
-
-    @Modifying
-    @Query("UPDATE JobEntity j SET j.status = 'COMPLETED', " +
-            "j.completedAt = CURRENT_TIMESTAMP, j.lastAccessed = CURRENT_TIMESTAMP " +
-            "WHERE j.jobId = :jobId")
-    int markJobCompleted(@Param("jobId") String jobId);
-
-    @Modifying
-    @Query("UPDATE JobEntity j SET j.status = 'FAILED', " +
-            "j.failureReason = :reason, j.lastAccessed = CURRENT_TIMESTAMP " +
-            "WHERE j.jobId = :jobId")
-    int markJobFailed(@Param("jobId") String jobId, @Param("reason") String reason);
-
-    List<JobEntity> findByCreatedAtBefore(Instant cutoffDate);
-
-    @Query("SELECT new JobEntity(j.jobId, j.fileType, j.status, null, " +
-            "j.createdAt, j.lastAccessed, j.completedAt, j.failureReason, j.userId, " +
-            "j.fileName, j.fileSize, j.contentType, j.version) " +
-            "FROM JobEntity j WHERE j.userId = :userId ORDER BY j.createdAt DESC")
-    List<JobEntity> findByUserIdWithoutFileData(@Param("userId") String userId);
+    List<JobEntity> findByStatusInAndCreatedAtBefore(
+            List<JobStatusEnum> statuses, Instant cutoffTime);
 
     @Modifying
     @Query("DELETE FROM JobEntity j WHERE j.createdAt < :cutoffDate")

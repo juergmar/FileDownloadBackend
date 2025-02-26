@@ -12,9 +12,6 @@ import lombok.NoArgsConstructor;
 
 import java.time.Instant;
 
-/**
- * Data Transfer Object for job information, excluding file data
- */
 @Data
 @Builder
 @NoArgsConstructor
@@ -38,9 +35,6 @@ public class JobDTO {
     @Schema(description = "When the job was created")
     private Instant createdAt;
 
-    @Schema(description = "When the job was last accessed")
-    private Instant lastAccessed;
-
     @Schema(description = "When the job was completed (if finished)")
     private Instant completedAt;
 
@@ -62,25 +56,6 @@ public class JobDTO {
     @Schema(description = "Whether the job has file data available")
     private boolean fileDataAvailable;
 
-    /**
-     * Check if the job is completed
-     */
-    @JsonIgnore
-    public boolean isCompleted() {
-        return status == JobStatusEnum.COMPLETED;
-    }
-
-    /**
-     * Check if the job is in progress
-     */
-    @JsonIgnore
-    public boolean isInProgress() {
-        return status == JobStatusEnum.PENDING || status == JobStatusEnum.IN_PROGRESS;
-    }
-
-    /**
-     * Check if the job has failed
-     */
     @JsonIgnore
     public boolean isFailed() {
         return status == JobStatusEnum.FAILED;

@@ -2,122 +2,91 @@ package de.ma.download.service;
 
 import de.ma.download.dto.GeneratedFile;
 import de.ma.download.entity.JobEntity;
+import de.ma.download.event.FileGenerationEvent;
 import de.ma.download.exception.JobNotFoundException;
 import de.ma.download.generator.FileGenerator;
 import de.ma.download.generator.FileGeneratorFactory;
-import de.ma.download.model.FileType;
 import de.ma.download.model.JobStatusEnum;
 import de.ma.download.repository.JobRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.event.EventListener;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
-
-import java.util.concurrent.CompletableFuture;
+import org.springframework.transaction.annotation.Transactional;
 
 @Slf4j
 @Service
 @RequiredArgsConstructor
 public class FileGenerationService {
 
-    private final JobRepository jobRepository;
     private final FileGeneratorFactory fileGeneratorFactory;
-    private final WebSocketNotificationService notificationService;
+    private final JobCommandService jobCommandService;
 
-    public void startGeneration(String jobId, FileType fileType, Object parameters) {
-        generateFile(jobId, fileType, parameters);
+    @EventListener
+    @Async("fileGenerationTaskExecutor")
+    @Transactional
+    public void handleFileGenerationEvent(FileGenerationEvent event) {
+        String jobId = event.getJobId();
+        log.info("Received file generation event for job: {}", jobId);
+        generateFile(jobId, event.getFileType(), event.getParameters());
     }
 
-    @Async("fileGenerationTaskExecutor")
-    protected CompletableFuture<Void> generateFile(String jobId, FileType fileType, Object parameters) {
+    @Transactional
+    public void generateFile(String jobId, de.ma.download.model.FileType fileType, Object parameters) {
         try {
-            JobEntity job = jobRepository.findById(jobId)
-                    .orElseThrow(() -> new JobNotFoundException(jobId));
+            JobEntity job = jobCommandService.updateJobStatus(jobId, JobStatusEnum.IN_PROGRESS);
 
             log.info("Starting file generation for job: {}", jobId);
-            job.setStatus(JobStatusEnum.IN_PROGRESS);
-            jobRepository.save(job);
 
-            // Notify status change via WebSocket
-            notificationService.notifyJobStatusChange(job);
+            if (jobCommandService.isJobCancelled(jobId)) {
+                log.info("Job cancelled before generation: {}", jobId);
+                return;
+            }
 
             FileGenerator generator = fileGeneratorFactory.getGenerator(fileType);
 
-            if (checkJobCancelled(jobId)) {
-                log.info("Job cancelled before generation: {}", jobId);
-                return CompletableFuture.completedFuture(null);
-            }
+            simulateProcessingTime(jobId);
 
-            // Simulate progress updates during processing
-            simulateProgressUpdates(jobId);
+            if (jobCommandService.isJobCancelled(jobId)) {
+                log.info("Job cancelled during generation: {}", jobId);
+                return;
+            }
 
             GeneratedFile generatedFile = generator.generate(jobId, parameters);
 
-            if (checkJobCancelled(jobId)) {
-                log.info("Job cancelled during generation: {}", jobId);
-                return CompletableFuture.completedFuture(null);
+            if (jobCommandService.isJobCancelled(jobId)) {
+                log.info("Job cancelled after generation: {}", jobId);
+                return;
             }
 
-            job = jobRepository.findById(jobId)
-                    .orElseThrow(() -> new JobNotFoundException(jobId));
-
-            job.setFileData(generatedFile.getFileData());
-            job.setFileSize((long) generatedFile.getFileData().length);
-            job.setContentType(generatedFile.getContentType());
-            job.setFileName(generatedFile.getFileName());
-            job.markCompleted();
-            jobRepository.save(job);
-
-            // Notify completion via WebSocket
-            notificationService.notifyJobStatusChange(job);
+            jobCommandService.completeJob(jobId, generatedFile);
 
             log.info("File generation completed: {}, size: {} bytes, type: {}",
                     jobId, generatedFile.getFileData().length, generatedFile.getContentType());
+
+        } catch (JobNotFoundException e) {
+            log.error("Job not found during generation: {}", jobId, e);
         } catch (Exception e) {
             log.error("Error during file generation: {}", jobId, e);
-            JobEntity job = jobRepository.findById(jobId).orElse(null);
-            if (job != null) {
-                job.markFailed(e.getMessage());
-                jobRepository.save(job);
-
-                // Notify failure via WebSocket
-                notificationService.notifyJobStatusChange(job);
-            } else {
-                jobRepository.markJobFailed(jobId, e.getMessage());
+            try {
+                jobCommandService.failJob(jobId, e.getMessage());
+            } catch (Exception ex) {
+                log.error("Failed to mark job as failed: {}", jobId, ex);
             }
         }
-
-        return CompletableFuture.completedFuture(null);
     }
 
-    private boolean checkJobCancelled(String jobId) {
-        return jobRepository.findById(jobId)
-                .map(j -> j.getStatus() == JobStatusEnum.CANCELLED)
-                .orElse(false);
-    }
-
-    private void simulateProgressUpdates(String jobId) {
+    private void simulateProcessingTime(String jobId) {
         try {
-            for (int progress = 10; progress <= 90; progress += 10) {
-                // Check if job was cancelled
-                if (checkJobCancelled(jobId)) {
+            for (int i = 0; i < 5; i++) {
+                if (jobCommandService.isJobCancelled(jobId)) {
                     break;
                 }
-
-                // Update progress
-                JobEntity job = jobRepository.findById(jobId)
-                        .orElseThrow(() -> new JobNotFoundException(jobId));
-
-                // Send progress update via WebSocket
-                notificationService.notifyJobStatusChange(job);
-
-                // Simulate processing time
                 Thread.sleep(500);
             }
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
-        } catch (Exception e) {
-            log.error("Error during progress updates: {}", jobId, e);
         }
     }
 }

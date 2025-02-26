@@ -28,9 +28,6 @@ public class JobStatusDTO {
     @Schema(description = "When the job was created")
     private Instant createdAt;
 
-    @Schema(description = "When the job was last accessed")
-    private Instant lastAccessed;
-
     @Schema(description = "When the job was completed (if finished)")
     private Instant completedAt;
 

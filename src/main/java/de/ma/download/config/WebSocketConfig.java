@@ -1,4 +1,3 @@
-// File: WebSocketConfig.java
 package de.ma.download.config;
 
 import de.ma.download.security.KeycloakJwtAuthenticationConverter;
@@ -7,7 +6,9 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.messaging.simp.config.MessageBrokerRegistry;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
-import org.springframework.web.socket.config.annotation.*;
+import org.springframework.web.socket.config.annotation.EnableWebSocketMessageBroker;
+import org.springframework.web.socket.config.annotation.StompEndpointRegistry;
+import org.springframework.web.socket.config.annotation.WebSocketMessageBrokerConfigurer;
 
 import java.util.Set;
 
@@ -26,9 +27,11 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
 
     @Override
     public void registerStompEndpoints(StompEndpointRegistry registry) {
+        // Register STOMP endpoint with JWT handshake interceptor
         registry.addEndpoint(WEBSOCKET_ENDPOINT)
                 .addInterceptors(new JwtHandshakeInterceptor(jwtDecoder, jwtAuthenticationConverter))
-                .setAllowedOrigins(allowedOrigins.toArray(String[]::new));
+                .setAllowedOrigins(allowedOrigins.toArray(String[]::new))
+                .setHandshakeHandler(new PrincipalHandshakeHandler());
     }
 
     @Override

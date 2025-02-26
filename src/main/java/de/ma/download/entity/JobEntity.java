@@ -37,9 +37,6 @@ public class JobEntity {
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
-    @Column(name = "last_accessed")
-    private Instant lastAccessed;
-
     @Column(name = "completed_at")
     private Instant completedAt;
 
@@ -60,20 +57,4 @@ public class JobEntity {
 
     @Version
     private Long version;
-
-    public void updateAccessTime() {
-        this.lastAccessed = Instant.now();
-    }
-
-    public void markCompleted() {
-        this.status = JobStatusEnum.COMPLETED;
-        this.completedAt = Instant.now();
-        updateAccessTime();
-    }
-
-    public void markFailed(String reason) {
-        this.status = JobStatusEnum.FAILED;
-        this.failureReason = reason;
-        updateAccessTime();
-    }
 }
